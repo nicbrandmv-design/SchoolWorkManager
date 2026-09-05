@@ -1,0 +1,163 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Class {
+  id          String   @id @default(cuid())
+  name        String
+  color       String   @default("#6366f1")
+  term        String?
+  createdAt   DateTime @default(now())
+
+  units       Unit[]
+  materials   Material[]
+  flashcards  Flashcard[]
+  quizQuestions QuizQuestion[]
+  assignments Assignment[]
+}
+
+model Unit {
+  id        String   @id @default(cuid())
+  classId   String
+  name      String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  class       Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  concepts    Concept[]
+  materials   Material[]
+  flashcards  Flashcard[]
+  quizQuestions QuizQuestion[]
+}
+
+model Concept {
+  id        String   @id @default(cuid())
+  unitId    String
+  name      String
+  createdAt DateTime @default(now())
+
+  unit        Unit           @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  flashcards  Flashcard[]
+  quizQuestions QuizQuestion[]
+
+  @@unique([unitId, name])
+}
+
+enum MaterialStatus {
+  PENDING
+  PROCESSING
+  DONE
+  ERROR
+}
+
+enum MaterialSource {
+  UPLOAD
+  CANVAS
+}
+
+model Material {
+  id            String         @id @default(cuid())
+  classId       String
+  unitId        String?
+  originalName  String
+  filePath      String
+  extractedText String?
+  status        MaterialStatus @default(PENDING)
+  source        MaterialSource @default(UPLOAD)
+  errorMessage  String?
+  uploadedAt    DateTime       @default(now())
+
+  class       Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  unit        Unit?          @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  flashcards  Flashcard[]
+  quizQuestions QuizQuestion[]
+}
+
+model Flashcard {
+  id         String   @id @default(cuid())
+  classId    String
+  unitId     String
+  conceptId  String?
+  materialId String?
+  front      String
+  back       String
+  createdAt  DateTime @default(now())
+
+  class    Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  unit     Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  concept  Concept? @relation(fields: [conceptId], references: [id], onDelete: SetNull)
+  material Material? @relation(fields: [materialId], references: [id], onDelete: SetNull)
+
+  progress StudyProgress?
+}
+
+model QuizQuestion {
+  id           String   @id @default(cuid())
+  classId      String
+  unitId       String
+  conceptId    String?
+  materialId   String?
+  question     String
+  choices      String
+  answerIndex  Int
+  explanation  String?
+  createdAt    DateTime @default(now())
+
+  class    Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  unit     Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  concept  Concept? @relation(fields: [conceptId], references: [id], onDelete: SetNull)
+  material Material? @relation(fields: [materialId], references: [id], onDelete: SetNull)
+}
+
+model StudyProgress {
+  id             String    @id @default(cuid())
+  flashcardId    String    @unique
+  box            Int       @default(1)
+  timesCorrect   Int       @default(0)
+  timesWrong     Int       @default(0)
+  lastReviewedAt DateTime?
+
+  flashcard Flashcard @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
+}
+
+enum AssignmentStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum AssignmentPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum AssignmentType {
+  HOMEWORK
+  EXAM
+  PROJECT
+  OTHER
+}
+
+model Assignment {
+  id          String             @id @default(cuid())
+  classId     String
+  title       String
+  description String?
+  dueDate     DateTime?
+  status      AssignmentStatus   @default(TODO)
+  priority    AssignmentPriority @default(MEDIUM)
+  type        AssignmentType     @default(HOMEWORK)
+  createdAt   DateTime           @default(now())
+
+  class Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+}
