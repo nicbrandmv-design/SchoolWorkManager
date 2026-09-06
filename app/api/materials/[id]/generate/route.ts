@@ -15,7 +15,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
   }
   if (!process.env.ANTHROPIC_API_KEY) {
     return jsonError(
-      "ANTHROPIC_API_KEY is not set. Add it to .env.local to enable AI generation.",
+      "ANTHROPIC_API_KEY is not set. Add it to .env (or your Vercel project's environment variables) to enable AI generation.",
       500,
     );
   }
