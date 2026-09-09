@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import path from "path";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { saveUpload } from "@/lib/storage";
-import { extractPdfText } from "@/lib/pdf";
-import { jsonError } from "@/lib/api";
+import { createMaterialFromBuffer } from "@/lib/materials";
+import { jsonError, handleApiError } from "@/lib/api";
 
 export async function GET(req: NextRequest) {
   const classId = req.nextUrl.searchParams.get("classId") ?? undefined;
@@ -16,7 +17,43 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(materials);
 }
 
+const fromBlobSchema = z.object({
+  classId: z.string().min(1),
+  unitId: z.string().min(1).nullable().optional(),
+  originalName: z.string().min(1),
+  blobUrl: z.string().url(),
+});
+
 export async function POST(req: NextRequest) {
+  const contentType = req.headers.get("content-type") ?? "";
+
+  // The file was already uploaded directly from the browser to Vercel Blob
+  // (bypassing this function's request-body size limit); we just fetch it
+  // back once, server-side, to extract text and record it.
+  if (contentType.includes("application/json")) {
+    try {
+      const { classId, unitId, originalName, blobUrl } = fromBlobSchema.parse(await req.json());
+
+      const cls = await prisma.class.findUnique({ where: { id: classId } });
+      if (!cls) return jsonError("Class not found", 404);
+
+      const blobRes = await fetch(blobUrl);
+      if (!blobRes.ok) return jsonError("Could not read the uploaded file", 502);
+      const buffer = Buffer.from(await blobRes.arrayBuffer());
+
+      const material = await createMaterialFromBuffer({
+        classId,
+        unitId: unitId ?? null,
+        originalName,
+        filePath: blobUrl,
+        buffer,
+      });
+      return NextResponse.json(material, { status: 201 });
+    } catch (err) {
+      return handleApiError(err);
+    }
+  }
+
   const formData = await req.formData();
   const file = formData.get("file");
   const classId = formData.get("classId");
@@ -36,29 +73,12 @@ export async function POST(req: NextRequest) {
   const storedName = `${randomUUID()}${ext}`;
   const filePath = await saveUpload(storedName, buffer);
 
-  const material = await prisma.material.create({
-    data: {
-      classId,
-      unitId: typeof unitId === "string" && unitId ? unitId : null,
-      originalName: file.name,
-      filePath,
-      status: "PROCESSING",
-    },
+  const material = await createMaterialFromBuffer({
+    classId,
+    unitId: typeof unitId === "string" && unitId ? unitId : null,
+    originalName: file.name,
+    filePath,
+    buffer,
   });
-
-  try {
-    const text = await extractPdfText(buffer);
-    const updated = await prisma.material.update({
-      where: { id: material.id },
-      data: { extractedText: text, status: "PENDING" },
-    });
-    return NextResponse.json(updated, { status: 201 });
-  } catch (err) {
-    console.error(err);
-    const failed = await prisma.material.update({
-      where: { id: material.id },
-      data: { status: "ERROR", errorMessage: "Failed to extract text from PDF" },
-    });
-    return NextResponse.json(failed, { status: 201 });
-  }
+  return NextResponse.json(material, { status: 201 });
 }

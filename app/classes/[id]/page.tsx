@@ -105,7 +105,11 @@ export default async function ClassDetailPage({ params }: { params: Promise<{ id
       <section>
         <h2 className="font-medium mb-3">Materials</h2>
         <div className="space-y-3">
-          <UploadMaterialForm classId={cls.id} units={cls.units.map((u) => ({ id: u.id, name: u.name }))} />
+          <UploadMaterialForm
+            classId={cls.id}
+            units={cls.units.map((u) => ({ id: u.id, name: u.name }))}
+            blobEnabled={Boolean(process.env.BLOB_READ_WRITE_TOKEN)}
+          />
           {cls.materials.length === 0 ? (
             <p className="text-sm text-black/50 dark:text-white/50 border border-dashed rounded-lg p-6 text-center">
               No materials uploaded yet.

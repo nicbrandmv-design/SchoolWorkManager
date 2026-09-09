@@ -11,7 +11,7 @@ const useBlobStorage = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
 
 export async function saveUpload(fileName: string, buffer: Buffer): Promise<string> {
   if (useBlobStorage) {
-    const blob = await put(`uploads/${fileName}`, buffer, { access: "private" });
+    const blob = await put(`uploads/${fileName}`, buffer, { access: "public" });
     return blob.url;
   }
   await mkdir(UPLOADS_DIR, { recursive: true });
